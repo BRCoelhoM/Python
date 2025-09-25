@@ -1,0 +1,217 @@
+import win32com.client as win32   # Biblioteca que permite gerar o executável pyinstaller --onefile -w nomedoarquivo.py
+#from tkinter import *            # Bibliteca para criar janelas
+import sqlite3
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+#Forma também está correta, porém é necessário usar o biblioteca.comando Ex.: tk.Tk, tk.Label, tk.Button e sem usar o as tkinter.Tk, tkinter.button ...
+import tkinter  as tk 
+from tkinter import ttk, messagebox
+import customtkinter as ctk
+from tkcalendar import DateEntry    
+
+
+
+# Conexão com o banco de dados
+
+conn = sqlite3.connect ("ControleDespesas.db")
+cursor = conn.cursor()
+cursor.execute(""" 
+    CREATE TABLE IF NOT EXISTS Despesas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Descricao VARCHAR(100) NOT NULL,
+        Valor DECIMAL(18,2) NOT NULL,
+        Data TEXT NOT NULL,
+        Categoria VARCHAR(20) NOT NULL,
+        Pagamento VARCHAR(20) NOT NULL,
+        Tipo VARCHAR(20) NOT NULL,
+        Observacao VARCHAR(100),
+        NumeroParcela INT,
+        TotalParcelas INT
+    )
+""")
+conn.commit()
+
+# Configuração do tema da interface
+#tk.set_appearance_mode('dark')  # Pode ser "Light", "Dark" ou "System"
+#ctk.set_default_color_theme("dark-blue")  # Temas disponíveis: "blue", "green", "dark-blue"
+
+# Definição de função a acão que será realiza ao apertar o BotaoLancarDespesa
+#Obter valores
+
+def BotaoLancarDespesa(): 
+    
+    descricao = descricao_entry.get().strip()
+    data_str = data_entry.get().strip()
+    categoria1 = categoria_box.get().strip()
+    pagamento = pagamento_box.get().strip()
+    tipo = tipo_box.get().strip()
+    parcelas_str = parcelas_box.get().strip()
+    valor_str = valor_entry.get().strip()
+    observacao = observaco_entry.get().strip()
+
+  
+    #Validações de campos obrigatórios
+   
+
+    campos_obrigatorios = [
+        (descricao,"Descrição"),
+        (categoria1,"Categoria"),
+        (pagamento,"Forma de Pagamento"),
+        (tipo,"Tipo"),
+        (valor_str,"Valor"),
+    ]
+
+    for campo, nome in campos_obrigatorios:
+        if not campo:
+            messagebox.showerror("Alerta",f"Preencha o campo {nome}")
+            return
+        
+    # Validação de valor inválido
+    try:
+        valorconvertido = float(valor_str)
+        if valorconvertido <=0:
+            messagebox.showerror("Erro","Valor deve ser maior que zero")
+    except:
+        messagebox.showerror("Erro","Valor inválido")
+
+    #Validação forma de pagamento
+                                       
+    parcelasconvertida = int(parcelas_str)
+
+
+    #Conversão de data se string para datetime
+
+    data_base = datetime.strptime(data_str, "%d/%m/%Y")
+
+    # Cálculo do valor da parcela
+
+    valor_parcela = valorconvertido/parcelasconvertida
+
+    # Inserir cada parcela no banco de dados
+
+    try:
+        for numero_parcela in range(1,parcelasconvertida + 1):
+            data_parcela = data_base + relativedelta(months=numero_parcela - 1)
+            data_parcela_str = data_parcela.strftime("%d/%m/%Y")
+
+            cursor.execute("""INSERT INTO Despesas 
+                           (Descricao, Valor, Data, Categoria, Pagamento, Tipo, Observacao, NumeroParcela, TotalParcelas) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (descricao, valor_parcela, data_parcela_str, categoria1, 
+                            pagamento, tipo, observacao, numero_parcela, parcelasconvertida))
+        conn.commit()
+        
+
+    except sqlite3.Error as e:
+       messagebox.showerror("Erro no sqlite3",e)
+    conn.commit()
+
+    #if descricao and valor_str and data_str and tipo and categoria1 and pagamento:
+    DespesaLancadaComSucesso.configure(text=f"Despesa lançada com sucesso em {parcelasconvertida} parcela(s)") #Permite deixar o texto oculto e exibí-lo apenas ao clicar no botão 
+    #messagebox.showinfo("Sucesso", f"Despesa Lançada com Sucesso em {parcelasconvertida} parcelas ")
+    #BotaoNovaDespesa()
+
+
+def BotaoNovaDespesa():
+    descricao_entry.delete(0, tk.END)
+    valor_entry.delete(0,tk.END)
+    data_entry.delete(0,tk.END)
+    #parcelas_box.delete(0,tk.END)
+    pagamento_box.delete(0,tk.END)
+    categoria_box.delete(0,tk.END)
+    tipo_box.delete(0,tk.END)
+    observaco_entry.delete(0,tk.END)
+    DespesaLancadaComSucesso.config(text="")
+ 
+def ValidaFloat(string):
+    if string == "":
+        return True
+    
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+    
+def BotaoFechar():
+    janela.destroy()
+
+# janela = Tk()   
+janela = tk.Tk()           # Criar uma janela
+janela.title("Controle de Despesas") # Titulo da janela
+janela.geometry("670x250") # Tamanho da janela
+
+ValidaValorFloat = (janela.register(ValidaFloat),"%P")
+
+descricao_label = tk.Label(janela,text="Descrição:*", font=("arial", 12))
+descricao_label.grid(column=0,row=0,padx=10,sticky="w")         # Cria dentro da janela um texto
+#despesa_label.grid(column=0,row=0) # .grid define a localização do texto na janela, padx e pady são espaçamentos
+
+descricao_entry = tk.Entry(janela,width=90)
+descricao_entry.place(x=100,y=3)
+
+valor_label = tk.Label(janela,text="Valor (R$):*",font=('arial',12))
+valor_label.grid(column=0,row=1,padx=10,pady=5,sticky="w")
+
+valor_entry = tk.Entry(janela,width=23,validate="key",validatecommand=ValidaValorFloat)
+valor_entry.place(x=100,y=30)
+
+data_label = tk.Label(janela,text="Data:*", font=('arial', 12))
+data_label.grid(column=0,row=2,padx=10,pady=3,sticky="w")
+
+data_entry = DateEntry (janela,width=20,date_pattern="dd/mm/yyyy")
+data_entry.place(x=100,y=60)
+
+categoria_label = tk.Label(janela,text="Categoria:*",font=("arial",12))
+categoria_label.grid(column=0,row=3,padx=10,pady=5,sticky="w")
+
+categoria = ["","TRANSPORTE","CASA","ELETRONICOS"]
+categoria_box = ttk.Combobox(janela,values=categoria)
+categoria_box.place(x=100,y=90)
+
+pagamento_label =tk.Label(janela,text="Pagamento:*",font=("arial",12))
+pagamento_label.place(x=400,y=90)
+
+pagamento_box = ttk.Combobox(janela,values=["","PIX","SANTANDER","NUBANK","BTG","DEBITO"])
+pagamento_box.place(x=500,y=90)
+
+tipo_label = tk.Label(janela,text="Tipo:*",font=("arial",12))
+tipo_label.place(x=400,y=63)
+tipo = ["ESSENCIAIS", "NAO ESSENCIAIS"]
+tipo_box = ttk.Combobox(janela,values=tipo)
+tipo_box.place(x=500,y=60)
+
+parcelas_label = tk.Label(janela, text="Parcelas:",font=("arial",12))
+parcelas_label.place(x=400,y=32)
+
+parcelas_box = ttk.Combobox(janela,values=[str(i) for i in range(1,13)])
+parcelas_box.set("01")
+parcelas_box.place(x=500,y=30)
+
+observacao_label = tk.Label(janela, text="Obs.: ", font=("arial",12))
+observacao_label.grid(column=0,row=4,padx=10,pady=5,sticky="w")
+
+observaco_entry = tk.Entry(janela,width=89)
+observaco_entry.place(x=102,y=128)
+
+#status_check = ttk.che(janela,text="Pago?") 
+#status_check.grid(pady=10)
+
+# Cria um botão dentro da janela, com texto salvar e atribui um comando neste caso definido na função Cliquebotao()
+# Não é necessário passar parâmetros () pois a funcão só será exibida ao apertar o botão
+
+LancarDespesa_button = ctk.CTkButton(janela, text="Lançar Despesa",command=BotaoLancarDespesa,font=("arial",12))
+LancarDespesa_button.place(x=260,y=170) # .grid define a localização do texto botão na janela, padx e pady são espaçamentos
+
+NovaDespesa_button = ctk.CTkButton(janela,text="Nova Despesa",font=("arial",12),command=BotaoNovaDespesa)
+NovaDespesa_button.place(x=100,y=170)
+
+Fechar_button = ctk.CTkButton(janela,text="Fechar",font=("arial",12),command=BotaoFechar)
+Fechar_button.place(x=420,y=170)
+
+DespesaLancadaComSucesso =tk.Label(janela,text="",fg="green") # Cria uma lbel na janela cujo texto só será exibido ao apertar o botão
+DespesaLancadaComSucesso.place(x=210,y=210)      #.grid define a localização do label na janela, padx e pady são espaçamentos
+
+#apertou = ctk.CTkLabel(janela,text="").grid(column=1,row=21,pady=2,padx=2)
+
+janela.mainloop()
